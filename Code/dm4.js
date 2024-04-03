@@ -27,24 +27,30 @@ const settings = {
 };
 
 const FamousPeople = {
-  "Childish Gambino": "Donald Glover, also known by his stage name Childish Gambino, is an American multi-talented artist who has made a significant impact in the entertainment industry.",
-  "Marvin Gaye": "is known as the Prince of Motown, was a legendary soul singer-producer-songwriter who fought for justice and equality in America.",
-  "Anna Delvey": "Anna Sorokin, commonly known as Anna Delvey, is a con artist who posed as a wealthy heiress to access upper-class New York social and art scenes. She became famous after her Netflix show called Finding Anna was released.",
-  "Mick Jagger": "Sir Michael Philip Jagger, more known as Mick Jagger, is the lead vocalist and one of the founders of The Rolling Stones, one of the longest-running and hugely successful bands ever.",
-  "Stieg Larsson": "Karl Stig-Erland (Stieg) Larsson was a Swedish journalist and writer, best known for writing the Millenium trilogy crime novels, one of which is The Girl with the Dragon Tattoo. His works became loved after his passing.",
-  "Rosa Parks": "Rosa Louise McCauley Parks was an American activist in the civil rights movement, best known for her pivotal role in the Montgomery bus boycott.",
-  "Ella Fitzgerald": "Ella Jane Fitzgerald, dubbed as the first lady of song, was the most popular female jazz singer in the United States for more than half a century.",
-  "Corey Taylor": "Corey Todd Taylor is the lead vocalist of the heavy metal bands Slipknot and Stone Sour, known for his powerful vocals and intense stage presence.",
-  "Lea Salonga": "Maria Lea Carmen Imutan Salonga is a Filipina singer and actress, also known as the singing voice of Disney's Jasmine and Mulan.",
+  "Childish Gambino": {information:"Donald Glover, also known by his stage name Childish Gambino, is an American multi-talented artist who has made a significant impact in the entertainment industry."},
+  "Marvin Gaye": {information:"is known as the Prince of Motown, was a legendary soul singer-producer-songwriter who fought for justice and equality in America."},
+  "Anna Delvey": {information: "Anna Sorokin, commonly known as Anna Delvey, is a con artist who posed as a wealthy heiress to access upper-class New York social and art scenes. She became famous after her Netflix show called Finding Anna was released."},
+  "Mick Jagger": {information: "Sir Michael Philip Jagger, more known as Mick Jagger, is the lead vocalist and one of the founders of The Rolling Stones, one of the longest-running and hugely successful bands ever."},
+  "Stieg Larsson": {information: "Karl Stig-Erland (Stieg) Larsson was a Swedish journalist and writer, best known for writing the Millenium trilogy crime novels, one of which is The Girl with the Dragon Tattoo. His works became loved after his passing."},
+  "Rosa Parks": {information: "Rosa Louise McCauley Parks was an American activist in the civil rights movement, best known for her pivotal role in the Montgomery bus boycott."},
+  "Ella Fitzgerald": {information: "Ella Jane Fitzgerald, dubbed as the first lady of song, was the most popular female jazz singer in the United States for more than half a century."},
+  "Corey Taylor": {information: "Corey Todd Taylor is the lead vocalist of the heavy metal bands Slipknot and Stone Sour, known for his powerful vocals and intense stage presence."},
+  "Lea Salonga": {information: "Maria Lea Carmen Imutan Salonga is a Filipina singer and actress, also known as the singing voice of Disney's Jasmine and Mulan."},
 };
 
+
+const helloUser = ["Hello, is anyone there?", "Please say something"];
+function randomRepeat(myarray){
+  const randomIndex =  Math.floor(Math.random() * myarray.length);
+    return myarray[randomIndex];
+}
 /* Helper functions */
 function isInFamousPeople(utterance) {
-  return utterance.toLowerCase() in FamousPeople;
+  return utterance in FamousPeople;
 }
 
 function getFamousPeopleInf(utterance) {
-  return FamousPeople[utterance.toLowerCase()] || "";
+  return (FamousPeople[utterance.toLowerCase()]|| {}).information;
 }
 
 function MeetingIntent(event) {
@@ -87,187 +93,253 @@ const dmMachine = setup({
         }),
         ({ context }) => context.ssRef.send({ type: "PREPARE" })
       ],
-      on: { ASRTTS_READY: "Prompt" }
+      on: { ASRTTS_READY: "WaitToStart" }
     },
-
+  
+    WaitToStart: { //dito may mali dapat yellow
+      after: {
+        "1000": "Prompt"
+      },
+      on: {
+        CLICK: "Prompt"
+      }
+    },
+  
     Prompt: {
-      entry: [{ type: "speakUser", 
-      params: `Hi, what can I do for you?` 
-    }
-  ],
-      on: { SPEAK_COMPLETE: "Listen" }
+      initial: "Prompt1",
+      states: {
+        Prompt1: {
+          entry: [{ type: "speakUser", 
+          params: `Hi, what can I do for you?`,
+        }],
+      on: { SPEAK_COMPLETE: "Intents" },
     },
-
-    Listen: {
+      Intents: {
       entry: "listenUser",
       on: {
         RECOGNISED: [
-          {
-            guard: ({ event }) => MeetingIntent(event?.nluValue?.topIntent),
-            target: "WithWhom"
+          {guard: ({event}) => event.nluValue.topIntent === "Create a meeting",
+            target: "WithWhom"},
+
+            {guard: ({event}) => event.nluValue.topIntent === "who is X" && isInFamousPeople(event.nluValue.entities[0].text),
+            actions: assign({celebrity: ({event}) => event.nluValue.entities[0].text}),
+            target: "Celebinfo",
           },
-          {
-            guard: ({ event }) => WhoIsXIntent(event?.nluValue?.topIntent),
-            actions: assign({
-              celebrity: ({ event }) => event?.nluValue?.entities?.[0]?.text //for some reason the code only works on my laptop if it's written like this 
-            }),
-            target: "ExtraInfo"
-          }
+          {guard: ({event}) => event.nluValue.topIntent === "who is X", 
+          target: "Nodata",
+          actions: assign({celebrity: ({context, event}) => event.nluValue.entities[0].text}),
+          },
+      
         ],
-        ASR_NOINPUT: "Noinput"
-      }
-    },
+        ASR_NOINPUT: "Noinput",
+      },
+  },
+},
+//who is x
+        Celebinfo: {
+          entry: [{
+            type: "speakUser",
+            params: ({context}) => `${getFamousPeopleInf(context.celebrity)}`
+          }],  
+          on: { SPEAK_COMPLETE: "#DM.Done" },
+          },
 
-    Noinput: {
-      entry: [{ type: "speakUser", params: `Hello, anyone there?` }],
-      on: { SPEAK_COMPLETE: "Prompt" }
-    },
+          Nodata:{
+            entry: [{
+            type: "speakUser",
+            params: `Can you ask for another celebrity, I don't have any data for the person you said.`,
+          }],                     
+          on: { SPEAK_COMPLETE: "#DM.Prompt.Prompt1" },
 
-    WithWhom: {
-      entry: [
-        {
-          type: "speakUser",
-          params: `With whom would you like to have a meeting with?` //Marvin gaye is the one that is recognized the most
-        }
-      ],
-      on: { SPEAK_COMPLETE: "ListenPersonMeet" }
-    },
+        },
 
-    ListenPersonMeet: {
-      entry: "listenUser",
-      on: {
-        RECOGNISED: {
-          actions: assign({
-            celebrity: ({ event }) => {
-              const entity = event?.nluValue?.entities?.[0];
-              return entity?.text ?? "";
+        Unclear:{
+          entry: [{
+            type: "speakUser",
+            params: `I'm sorry, can you please say something, it is unclear.`,
+          }],                     
+          on: { SPEAK_COMPLETE: "Intents" },
+        },
+
+        Noinput: {
+          entry: ({context}) =>
+                context.ssRef.send({
+                    type: "SPEAK",
+                    value: {
+                        utterance: randomRepeat(helloUser),
+                    },
+                }),
+                on: {
+                    SPEAK_COMPLETE: "#DM.Prompt.Prompt1"
+                },
+            
+            },
+
+
+    //appointment 
+        WithWhom: {
+          after: {
+            "3000": "#DM.Prompt.Prompt1"
+          },  
+          entry: [
+            {
+              type: "speakUser",
+              params: `With whom would you like to have a meeting with?` //Marvin gaye is the one that is recognized the most
             }
-          }),
-          target: "Day"
+          ],
+          on: { SPEAK_COMPLETE: "ListenPersonMeet" }
         },
-        ASR_NOINPUT: {
-          target: "Didntunderstand"
-        }
-      }
-    },
 
-
-    Didntunderstand: {
-      entry: [
-        {
-          type: "speakUser",
-          params: `I didn't understand, can you repeat?`
-        }
-      ],
-      on: { SPEAK_COMPLETE: "WithWhom" }
-    },
-
-    Day: {
-      entry: [
-        {
-          type: "speakUser",
-          params: `On which day would you like to have a meeting?`
-        }
-      ],
-      on: {
-        SPEAK_COMPLETE: "TimeHour"
-      }
-    },
-
-    TimeHour: {
-      entry: "listenUser",
-      on: {
-        RECOGNISED: {
-          actions: assign({
-            meeting_time: ({ event }) => event?.nluValue?.entities?.[0]?.text
-          }),
-          target: "Time"
+        ListenPersonMeet: {
+          entry: "listenUser",
+          on: {
+            ASR_NOINPUT : "Reraise",
+            RECOGNISED: {
+              actions: 
+              assign({
+                celebrity: ({ event }) => event.nluValue.entities[0].text
+                }),
+              target: "Day"
+            },
+            ASR_NOINPUT: {
+              target: "Didntunderstand"
+            }
+          }
         },
-        ASR_NOINPUT: {
-          target: "ReRaise"
-        }
-      }
-    },
 
-    ReRaise: {
-      entry: [
-        {
-          type: "speakUser",
-          params: `I didn't understand, can you repeat?`
-        }
-      ],
-      on: { SPEAK_COMPLETE: "Day" }
-    },
-
-    Time: {
-      entry: [
-        {
-          type: "speakUser",
-          params: `What time is the meeting going to take place?`
-        }
-      ],
-      on: {
-        SPEAK_COMPLETE: "ListenTime"
-      }
-    },
-
-    ListenTime: {
-      entry: "listenUser",
-      on: {
-        RECOGNISED: {
-          actions: assign({
-            meeting_hour: ({ event }) => event?.nluValue?.entities?.[0]?.text
-          }),
-          target: "Verification"
+        ReRaise: {
+          entry: [
+            {
+              type: "speakUser",
+              params: `I didn't understand, can you repeat?`
+            }
+          ],
+          on: { SPEAK_COMPLETE: "ListenPersonMeet" }
         },
-        ASR_NOINPUT: {
-          target: "ReRaise1"
-        }
+
+
+        Didntunderstand: {
+          entry: [
+            {
+              type: "speakUser",
+              params: `I didn't understand, can you repeat?`
+            }
+          ],
+          on: { SPEAK_COMPLETE: "WithWhom" }
+        },
+
+        Day: {
+          after: {
+            "3000": "#DM.Prompt.Prompt1"
+          },   
+            entry: [
+              {
+              type: "speakUser",
+              params: `On which day would you like to have a meeting?`
+              }
+          ],
+          on: {
+            SPEAK_COMPLETE: "TimeHour"
+          }
+        },
+
+        TimeHour: {
+          entry: "listenUser",
+          on: {
+            RECOGNISED: {
+              actions: assign({
+                meeting_time: ({ event }) => event.nluValue.entities[0].text
+              }),
+              target: "Time"
+            },
+            ASR_NOINPUT: {
+              target: "ReRaise1"
+            }
+          }
+        },
+
+        ReRaise1: {
+          entry: [
+            {
+              type: "speakUser",
+              params: `I didn't understand, can you repeat?`
+            }
+          ],
+          on: { SPEAK_COMPLETE: "TimeHour" }
+        },
+
+        Time: {
+          entry: [
+            {
+              type: "speakUser",
+              params: `What time is the meeting going to take place?`
+            }
+          ],
+          on: {
+            SPEAK_COMPLETE: "ListenTime"
+          }
+        },
+
+        ListenTime: {
+          entry: "listenUser",
+          on: {
+            RECOGNISED: {
+              actions: assign({
+                meeting_hour: ({ event }) => event.nluValue.entities[0].text
+              }),
+              target: "Verification"
+            },
+            ASR_NOINPUT: {
+              target: "ReRaise2"
+            }
+          }
+        },
+
+        ReRaise2: {
+          entry: [
+            {
+              type: "speakUser",
+              params: `I didn't understand, can you repeat?`
+            }
+          ],
+          on: { SPEAK_COMPLETE: "ListenTime" }
+        },
+
+        Verification: {
+          entry: [
+            {
+              type: "speakUser",
+              params: ({ context }) =>
+                `You want to create an appointment at ${context.meeting_hour} with ${context.celebrity} on ${context.meeting_time}, let's proceed.`
+            }
+          ],
+          on: { SPEAK_COMPLETE: "ExtraInfo" }
+        },
+
+
+
+        ExtraInfo: {
+          entry: [
+            { 
+              type: "speakUser", 
+              params: ({ context }) =>
+                isInFamousPeople(context.celebrity) ? 
+                `In order to prepare your meeting with ${context.celebrity}, here is some information you would want to know. ${getFamousPeopleInf(context.celebrity)}` :
+                `I don't have information about ${context.celebrity}.`
+            }
+          ],
+          on: {
+            SPEAK_COMPLETE: "Done"
+          }
+        },
+
+        Done: {
+          entry: [{ type: "speakUser", params: `Enjoy your meeting!`}
+        ],
+          on: { CLICK: "Prompt" }
+
+        },}
       }
-    },
-
-    ReRaise1: {
-      entry: [
-        {
-          type: "speakUser",
-          params: `I didn't understand, can you repeat?`
-        }
-      ],
-      on: { SPEAK_COMPLETE: "Time" }
-    },
-
-    Verification: {
-      entry: [
-        {
-          type: "speakUser",
-          params: ({ context }) =>
-            `You want to create an appointment at ${context.meeting_hour} with ${context.celebrity} on ${context.meeting_time}, let's proceed.`
-        }
-      ],
-      on: { SPEAK_COMPLETE: "ExtraInfo" }
-    },
-
-    ExtraInfo: {
-      entry: [
-        { 
-          type: "speakUser", 
-          params: ({ context }) =>
-            isInFamousPeople(context.celebrity) ? 
-            `In order to prepare your meeting with ${context.celebrity}, here is some information you would want to know. ${getFamousPeopleInf(context.celebrity).information}` :
-            `I don't have information about ${context.celebrity}.`
-        }
-      ],
-      on: {
-        SPEAK_COMPLETE: "Done"
-      }
-    },
-
-    Done: {
-      entry: [{ type: "speakUser", params: `Enjoy your meeting!`}
-    ],
-      on: { CLICK: "Prompt" }
-    }
-  }
 });
 
 const dmActor = createActor(dmMachine, {
